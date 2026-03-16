@@ -29,7 +29,9 @@ export default function ResumePage() {
   const addSkillsMutation = useMutation({
     mutationFn: async () => {
       const allSkills = await skillsApi.list().then((r) => r.data)
-      const skillMap = new Map(allSkills.map((s: { name: string; id: string }) => [s.name, s.id]))
+      const skillMap = new Map<string, string>(
+  allSkills.map((s: { name: string; id: string }) => [s.name, s.id])
+)
       for (const name of Array.from(selected)) {
         const skillId = skillMap.get(name)
         if (skillId) {
