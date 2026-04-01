@@ -47,6 +47,14 @@ export const authApi = {
     api.post('/auth/register', data),
   login: (data: { email: string; password: string }) =>
     api.post('/auth/login', data),
+  verifyEmail: (token: string) =>
+    api.post('/auth/verify-email', { token }),
+  resendVerification: (email: string) =>
+    api.post('/auth/resend-verification', { email }),
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+  resetPassword: (token: string, password: string) =>
+    api.post('/auth/reset-password', { token, password }),
 }
 
 // User helpers
@@ -89,4 +97,36 @@ export const marketApi = {
     api.get('/market/skill-gap', { params: { role } }),
   salaryRanges: (role?: string) =>
     api.get('/market/salary-ranges', { params: { role } }),
+}
+
+// Resume helpers
+export const resumeApi = {
+  upload: (file: File) => {
+    const form = new FormData()
+    form.append('resume', file)
+    return api.post('/resume/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  info: () => api.get('/resume'),
+  download: () => api.get('/resume/download', { responseType: 'blob' }),
+  remove: () => api.delete('/resume'),
+}
+
+// Scraper helpers
+export const scraperApi = {
+  run: (mode?: 'europe' | 'global') => api.post('/scraper/run', { mode: mode || 'europe' }),
+  jobs: (params?: Record<string, string>) => api.get('/scraper/jobs', { params }),
+  stats: () => api.get('/scraper/stats'),
+}
+
+// Auto-apply helpers
+export const autoApplyApi = {
+  apply: (jobId: string, coverLetter?: string) =>
+    api.post(`/auto-apply/${jobId}`, { coverLetter }),
+  bulkApply: (jobIds: string[]) => api.post('/auto-apply', { jobIds }),
+  stats: () => api.get('/auto-apply/stats'),
+  history: (params?: Record<string, string>) => api.get('/auto-apply/history', { params }),
+  eligible: () => api.get('/auto-apply/eligible'),
+  skip: (jobId: string) => api.patch(`/auto-apply/${jobId}/skip`),
 }

@@ -9,16 +9,27 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  passwordHash        String
+  name                String
+  emailVerified       Boolean   @default(false)
+  emailVerifyToken    String?   @unique
+  emailVerifyExpires  DateTime?
+  passwordResetToken  String?   @unique
+  passwordResetExpires DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  lastLoginIp         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  profile      UserProfile?
-  applications Application[]
-  userSkills   UserSkill[]
+  profile            UserProfile?
+  applications       Application[]
+  userSkills         UserSkill[]
+  autoApplies        AutoApply[]
+  emailNotifications EmailNotification[]
 
   @@map("users")
 }
@@ -33,6 +44,9 @@ model UserProfile {
   bio             String?
   linkedinUrl     String?
   githubUrl       String?
+  resumePath      String?
+  resumeName      String?
+  resumeUploadedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -152,22 +166,70 @@ enum SkillCategory {
 }
 
 model Job {
-  id          String    @id @default(uuid())
-  title       String
-  company     String
-  location    String?
-  isRemote    Boolean   @default(false)
-  countryCode String?
-  salaryMin   Int?
-  salaryMax   Int?
-  currency    String?
-  postedAt    DateTime
-  source      String
-  sourceUrl   String?
+  id               String    @id @default(uuid())
+  externalId       String?   @unique
+  title            String
+  company          String
+  location         String?
+  isRemote         Boolean   @default(false)
+  workMode         String    @default("remote")
+  countryCode      String?
+  salaryMin        Int?
+  salaryMax        Int?
+  currency         String?
+  description      String?
+  applyUrl         String?
+  tags             String?
+  visaSponsorship  Boolean   @default(false)
+  postedAt         DateTime
+  scrapedAt        DateTime  @default(now())
+  source           String
+  sourceUrl        String?
+  autoApplyStatus  AutoApplyStatus @default(PENDING)
 
-  jobSkills JobSkill[]
+  jobSkills    JobSkill[]
+  autoApplies  AutoApply[]
 
   @@map("jobs")
+}
+
+enum AutoApplyStatus {
+  PENDING
+  ELIGIBLE
+  APPLIED
+  NOT_ELIGIBLE
+  SKIPPED
+}
+
+model AutoApply {
+  id            String   @id @default(uuid())
+  jobId         String
+  userId        String
+  status        String   @default("queued")
+  method        String?
+  coverLetter   String?
+  appliedAt     DateTime?
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, userId])
+  @@map("auto_applies")
+}
+
+model EmailNotification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  subject   String
+  body      String
+  sentAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_notifications")
 }
 
 model JobSkill {

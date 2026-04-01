@@ -13,15 +13,17 @@ import {
   Settings,
   LogOut,
   TrendingUp,
+  Rocket,
 } from 'lucide-react'
 
 const navItems = [
-  { label: 'Overview',   href: '/dashboard',  icon: LayoutDashboard },
-  { label: 'Tracker',    href: '/tracker',     icon: Briefcase },
-  { label: 'Market',     href: '/market',      icon: TrendingUp },
-  { label: 'Skill Gap',  href: '/skills',      icon: Zap },
-  { label: 'Insights',   href: '/insights',    icon: BarChart3 },
-  { label: 'Resume',     href: '/resume',      icon: FileText },
+  { label: 'Overview',    href: '/dashboard',   icon: LayoutDashboard },
+  { label: 'Tracker',     href: '/tracker',      icon: Briefcase },
+  { label: 'Auto Apply',  href: '/auto-apply',   icon: Rocket },
+  { label: 'Market',      href: '/market',        icon: TrendingUp },
+  { label: 'Skill Gap',   href: '/skills',        icon: Zap },
+  { label: 'Insights',    href: '/insights',      icon: BarChart3 },
+  { label: 'Resume',      href: '/resume',        icon: FileText },
 ]
 
 export default function Sidebar() {
