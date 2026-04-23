@@ -3,8 +3,52 @@ import { requireAuth, AuthRequest } from '../middleware/auth'
 import { prisma } from '../lib/prisma'
 import { runAllScrapers } from '../services/scraper'
 import { sendNewJobsDigest } from '../services/email'
+import { PORTALS, scanPortals } from '../services/portals'
+import { evaluateJob } from '../services/evaluation'
+import { importJobFromUrl } from '../services/importUrl'
 
 const router = Router()
+
+// GET /api/scraper/portals — list the predefined company portals
+router.get('/portals', requireAuth, async (_req: AuthRequest, res: Response) => {
+  return res.json({
+    portals: PORTALS.map(p => ({
+      key: `${p.ats}:${p.token}`,
+      company: p.company,
+      ats: p.ats,
+      category: p.category,
+    })),
+  })
+})
+
+// POST /api/scraper/portals/scan — scrape selected (or all) company portals
+// Body: { portals?: string[] }  (keys are "ats:token"; empty = all)
+router.post('/portals/scan', requireAuth, async (req: AuthRequest, res: Response) => {
+  const tokens = Array.isArray(req.body?.portals) ? req.body.portals : undefined
+  const results = await scanPortals(tokens)
+  const totalNew = results.reduce((s, r) => s + r.inserted, 0)
+  return res.json({ results, totalNew })
+})
+
+// POST /api/scraper/import — paste a Greenhouse/Lever/Ashby URL
+// Body: { url: string }
+router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
+  const url = (req.body?.url || '').trim()
+  if (!url) return res.status(400).json({ error: 'url is required' })
+  const result = await importJobFromUrl(url)
+  if (!result.ok) return res.status(400).json({ error: result.error })
+  return res.json({ job: result.job })
+})
+
+// POST /api/scraper/jobs/:id/evaluate — A–F score vs. user profile
+router.post('/jobs/:id/evaluate', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const evalData = await evaluateJob(req.userId!, req.params.id)
+    return res.json({ evaluation: evalData })
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message })
+  }
+})
 
 // POST /api/scraper/run — Trigger a manual scrape
 // Body: { mode: "europe" | "global" } — defaults to "europe"

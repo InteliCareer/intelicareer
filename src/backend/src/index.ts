@@ -11,7 +11,7 @@ import marketRoutes from './routes/market.routes'
 import scraperRoutes from './routes/scraper.routes'
 import autoApplyRoutes from './routes/autoApply.routes'
 import resumeRoutes from './routes/resume.routes'
-
+``
 const app = express()
 const PORT = process.env.PORT || 3001
 
@@ -68,6 +68,7 @@ const authLimiter = rateLimit({
     if (typeof forwarded === 'string') return forwarded.split(',')[0].trim()
     return req.ip || req.socket.remoteAddress || 'unknown'
   },
+  validate: { keyGeneratorIpFallback: false },
 })
 
 const scrapeLimiter = rateLimit({

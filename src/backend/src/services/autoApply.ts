@@ -183,6 +183,7 @@ export async function getAutoApplyStats(userId: string) {
   const applied = await prisma.autoApply.count({ where: { userId, status: 'applied' } })
   const queued = await prisma.autoApply.count({ where: { userId, status: 'queued' } })
   const errors = await prisma.autoApply.count({ where: { userId, status: 'error' } })
+  const saved = await prisma.job.count({ where: { autoApplyStatus: 'SAVED' } })
 
   const recent = await prisma.autoApply.findMany({
     where: { userId },
@@ -191,5 +192,5 @@ export async function getAutoApplyStats(userId: string) {
     take: 10,
   })
 
-  return { total, applied, queued, errors, recent }
+  return { total, applied, queued, errors, saved, recent }
 }

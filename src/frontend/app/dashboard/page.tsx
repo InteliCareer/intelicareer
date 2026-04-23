@@ -1,9 +1,9 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { appsApi, marketApi } from '@/lib/api'
+import { appsApi, marketApi, autoApplyApi } from '@/lib/api'
 import { STAGE_DOT, STAGE_LABELS, formatSalary } from '@/lib/utils'
-import { Briefcase, Zap, TrendingUp, Target, ArrowUpRight, Clock } from 'lucide-react'
+import { Briefcase, Zap, TrendingUp, Target, ArrowUpRight, Clock, Bookmark, Rocket } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 const CHART_COLORS = ['#8b5cf6', '#7c3aed', '#6d28d9', '#5b21b6', '#4c1d95']
@@ -22,6 +22,11 @@ export default function DashboardPage() {
   const { data: topSkills } = useQuery({
     queryKey: ['top-skills-overview'],
     queryFn: () => marketApi.topSkills('Backend Engineer', 30).then((r) => r.data),
+  })
+
+  const { data: autoStats } = useQuery({
+    queryKey: ['auto-apply-stats'],
+    queryFn: () => autoApplyApi.stats().then((r) => r.data),
   })
 
   const activeApps = apps?.filter((a: { stage: string }) =>
@@ -67,6 +72,22 @@ export default function DashboardPage() {
           value={stats?.byStage?.OFFER ?? 0}
           icon={<Zap className="w-4 h-4" />}
           color="yellow"
+        />
+      </div>
+
+      {/* Auto Apply roll-up */}
+      <div className="grid grid-cols-2 lg:grid-cols-2 gap-4">
+        <StatCard
+          label="Saved for later"
+          value={autoStats?.saved ?? 0}
+          icon={<Bookmark className="w-4 h-4" />}
+          color="yellow"
+        />
+        <StatCard
+          label="Auto-Applied"
+          value={autoStats?.applied ?? 0}
+          icon={<Rocket className="w-4 h-4" />}
+          color="emerald"
         />
       </div>
 

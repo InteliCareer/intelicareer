@@ -60,6 +60,18 @@ router.patch('/:jobId/skip', requireAuth, async (req: AuthRequest, res: Response
   return res.json({ success: true })
 })
 
+// PATCH /api/auto-apply/:jobId/save — toggle SAVED ↔ ELIGIBLE
+router.patch('/:jobId/save', requireAuth, async (req: AuthRequest, res: Response) => {
+  const job = await prisma.job.findUnique({ where: { id: req.params.jobId } })
+  if (!job) return res.status(404).json({ error: 'Job not found' })
+  const nextStatus = job.autoApplyStatus === 'SAVED' ? 'ELIGIBLE' : 'SAVED'
+  await prisma.job.update({
+    where: { id: req.params.jobId },
+    data: { autoApplyStatus: nextStatus },
+  })
+  return res.json({ success: true, status: nextStatus })
+})
+
 // GET /api/auto-apply/eligible — Get all eligible jobs for auto-apply
 router.get('/eligible', requireAuth, async (req: AuthRequest, res: Response) => {
   const limit = Math.min(parseInt((req.query.limit as string) || '50', 10), 100)

@@ -255,11 +255,12 @@ async function main() {
 
   const demoUser = await prisma.user.upsert({
     where: { email: 'demo@intelicareer.com' },
-    update: {},
+    update: { emailVerified: true },
     create: {
       email: 'demo@intelicareer.com',
       passwordHash,
       name: 'Alex Developer',
+      emailVerified: true,
       profile: {
         create: {
           targetRole: 'Senior Backend Engineer',

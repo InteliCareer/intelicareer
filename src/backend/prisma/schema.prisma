@@ -187,6 +187,11 @@ model Job {
   sourceUrl        String?
   autoApplyStatus  AutoApplyStatus @default(PENDING)
 
+  evaluationGrade    String?
+  evaluationScore    Int?
+  evaluationJson     String?
+  evaluatedAt        DateTime?
+
   jobSkills    JobSkill[]
   autoApplies  AutoApply[]
 
@@ -196,6 +201,7 @@ model Job {
 enum AutoApplyStatus {
   PENDING
   ELIGIBLE
+  SAVED
   APPLIED
   NOT_ELIGIBLE
   SKIPPED

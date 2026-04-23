@@ -47,8 +47,8 @@ export const authApi = {
     api.post('/auth/register', data),
   login: (data: { email: string; password: string }) =>
     api.post('/auth/login', data),
-  verifyEmail: (token: string) =>
-    api.post('/auth/verify-email', { token }),
+  verifyEmail: (token: string, email: string) =>
+    api.post('/auth/verify-email', { token, email }),
   resendVerification: (email: string) =>
     api.post('/auth/resend-verification', { email }),
   forgotPassword: (email: string) =>
@@ -118,6 +118,10 @@ export const scraperApi = {
   run: (mode?: 'europe' | 'global') => api.post('/scraper/run', { mode: mode || 'europe' }),
   jobs: (params?: Record<string, string>) => api.get('/scraper/jobs', { params }),
   stats: () => api.get('/scraper/stats'),
+  portals: () => api.get('/scraper/portals'),
+  scanPortals: (portals?: string[]) => api.post('/scraper/portals/scan', { portals }),
+  importUrl: (url: string) => api.post('/scraper/import', { url }),
+  evaluate: (jobId: string) => api.post(`/scraper/jobs/${jobId}/evaluate`),
 }
 
 // Auto-apply helpers
@@ -129,4 +133,5 @@ export const autoApplyApi = {
   history: (params?: Record<string, string>) => api.get('/auto-apply/history', { params }),
   eligible: () => api.get('/auto-apply/eligible'),
   skip: (jobId: string) => api.patch(`/auto-apply/${jobId}/skip`),
+  toggleSave: (jobId: string) => api.patch(`/auto-apply/${jobId}/save`),
 }

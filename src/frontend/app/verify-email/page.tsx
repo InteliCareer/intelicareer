@@ -16,13 +16,14 @@ export default function VerifyEmailPage() {
 
   useEffect(() => {
     const token = searchParams.get('token')
-    if (!token) {
+    const email = searchParams.get('email')
+    if (!token || !email) {
       setStatus('error')
-      setMessage('No verification token found.')
+      setMessage('Verification link is missing its token or email.')
       return
     }
 
-    authApi.verifyEmail(token)
+    authApi.verifyEmail(token, email)
       .then(({ data }) => {
         setStatus('success')
         setMessage(data.message || 'Email verified!')

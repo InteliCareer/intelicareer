@@ -47,6 +47,8 @@ function getClientIp(req: Request): string {
 }
 
 // ── Register ────────────────────────────────────────────────────
+const VERIFY_TOKEN_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
 router.post('/register', async (req: Request, res: Response) => {
   const result = registerSchema.safeParse(req.body)
   if (!result.success) {
@@ -59,30 +61,44 @@ router.post('/register', async (req: Request, res: Response) => {
   const normalizedEmail = email.toLowerCase().trim()
 
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
-  if (existing) {
-    // Don't reveal whether email exists — use generic message
+  if (existing && existing.emailVerified) {
     return res.status(409).json({ error: 'Unable to create account with this email' })
   }
 
   const passwordHash = await bcrypt.hash(password, 12)
   const verifyToken = generateVerifyToken()
-  const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+  const verifyExpires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS)
 
-  const user = await prisma.user.create({
-    data: {
-      email: normalizedEmail,
-      passwordHash,
-      name: name.trim(),
-      emailVerifyToken: verifyToken,
-      emailVerifyExpires: verifyExpires,
-      profile: { create: {} },
-    },
-    select: { id: true, email: true, name: true, createdAt: true },
-  })
+  // If the account exists but is unverified, refresh it (new password + new
+  // verification token) instead of blocking. This unblocks the common case
+  // where the previous token expired before the user could click the link.
+  const user = existing
+    ? await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          passwordHash,
+          name: name.trim(),
+          emailVerifyToken: verifyToken,
+          emailVerifyExpires: verifyExpires,
+        },
+        select: { id: true, email: true, name: true, createdAt: true },
+      })
+    : await prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          passwordHash,
+          name: name.trim(),
+          emailVerifyToken: verifyToken,
+          emailVerifyExpires: verifyExpires,
+          profile: { create: {} },
+        },
+        select: { id: true, email: true, name: true, createdAt: true },
+      })
 
-  // Send verification email
+  // Send verification email — link includes email so the verify step proves
+  // the click came from the owner of this address (token-plus-email binding).
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
-  const verifyUrl = `${frontendUrl}/verify-email?token=${verifyToken}`
+  const verifyUrl = `${frontendUrl}/verify-email?token=${verifyToken}&email=${encodeURIComponent(normalizedEmail)}`
 
   try {
     await sendEmail({
@@ -103,7 +119,7 @@ router.post('/register', async (req: Request, res: Response) => {
             </a>
           </div>
           <p style="color:#64748b;font-size:12px;text-align:center;margin-top:24px;">
-            This link expires in 24 hours.<br/>
+            This link expires in 5 minutes.<br/>
             If you didn't create this account, ignore this email.
           </p>
           <hr style="border:none;border-top:1px solid #1e293b;margin:24px 0;" />
@@ -127,18 +143,22 @@ router.post('/register', async (req: Request, res: Response) => {
 
 // ── Verify Email ────────────────────────────────────────────────
 router.post('/verify-email', async (req: Request, res: Response) => {
-  const { token } = req.body
+  const { token, email } = req.body
   if (!token || typeof token !== 'string') {
     return res.status(400).json({ error: 'Verification token is required' })
   }
-
-  const user = await prisma.user.findUnique({ where: { emailVerifyToken: token } })
-  if (!user) {
-    return res.status(400).json({ error: 'Invalid or expired verification link' })
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'Email is required' })
   }
 
+  const normalizedEmail = email.toLowerCase().trim()
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+
+  // Constant-ish shape of error messages to avoid leaking which half is wrong.
+  const invalid = () => res.status(400).json({ error: 'Invalid or expired verification link' })
+  if (!user || user.emailVerifyToken !== token) return invalid()
   if (user.emailVerifyExpires && user.emailVerifyExpires < new Date()) {
-    return res.status(400).json({ error: 'Verification link has expired. Please register again.' })
+    return res.status(400).json({ error: 'Verification link has expired. Please register again to get a new one.' })
   }
 
   await prisma.user.update({
@@ -172,7 +192,7 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
   }
 
   const verifyToken = generateVerifyToken()
-  const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  const verifyExpires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS)
 
   await prisma.user.update({
     where: { id: user.id },
@@ -180,7 +200,7 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
   })
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
-  const verifyUrl = `${frontendUrl}/verify-email?token=${verifyToken}`
+  const verifyUrl = `${frontendUrl}/verify-email?token=${verifyToken}&email=${encodeURIComponent(normalizedEmail)}`
 
   try {
     await sendEmail({
@@ -196,7 +216,7 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
               Verify Email
             </a>
           </div>
-          <p style="color:#64748b;font-size:12px;text-align:center;">Expires in 24 hours.</p>
+          <p style="color:#64748b;font-size:12px;text-align:center;">Expires in 5 minutes.</p>
         </div>
       `,
     })
