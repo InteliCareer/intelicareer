@@ -1,6 +1,100 @@
 import { prisma } from '../lib/prisma'
 import { sendAutoApplyConfirmation } from './email'
 
+// AutoApply.status — lowercase value the DB stores, per (userId, jobId) row.
+// Source of truth for everything user-specific (save / skip / apply / queued).
+// Job.autoApplyStatus stays as a system-wide moderation flag (e.g. NOT_ELIGIBLE
+// for jobs we never want to surface) but is no longer used for per-user state.
+export type AutoApplyUserStatus = 'saved' | 'skipped' | 'queued' | 'applied' | 'error'
+
+const USER_STATUS_TO_DISPLAY: Record<string, string> = {
+  saved:   'SAVED',
+  skipped: 'SKIPPED',
+  applied: 'APPLIED',
+  queued:  'PENDING',
+  error:   'ELIGIBLE', // errored applies are retryable
+}
+
+// Returns the user's effective status for a given job ('eligible' if no row).
+export async function getUserJobStatus(userId: string, jobId: string): Promise<string> {
+  const rec = await prisma.autoApply.findUnique({
+    where: { jobId_userId: { jobId, userId } },
+    select: { status: true },
+  })
+  return rec?.status || 'eligible'
+}
+
+// Annotates each job with the calling user's per-user status, overwriting
+// `autoApplyStatus` so the frontend can keep reading that field unchanged.
+export async function attachUserStatus<T extends { id: string }>(
+  jobs: T[],
+  userId: string,
+): Promise<(T & { autoApplyStatus: string })[]> {
+  if (jobs.length === 0) return [] as (T & { autoApplyStatus: string })[]
+  const records = await prisma.autoApply.findMany({
+    where: { userId, jobId: { in: jobs.map(j => j.id) } },
+    select: { jobId: true, status: true },
+  })
+  const byJob = new Map(records.map(r => [r.jobId, r.status]))
+  return jobs.map(j => ({
+    ...j,
+    autoApplyStatus: USER_STATUS_TO_DISPLAY[byJob.get(j.id) || ''] || 'ELIGIBLE',
+  }))
+}
+
+// Returns the set of jobIds for which the user has any AutoApply record.
+async function getJobIdsWithAnyUserRecord(userId: string): Promise<string[]> {
+  const recs = await prisma.autoApply.findMany({
+    where: { userId },
+    select: { jobId: true },
+  })
+  return recs.map(r => r.jobId)
+}
+
+// Returns jobIds where the user's AutoApply.status matches the given lowercase
+// value. Used by the scraper job-list endpoint to filter the SAVED/APPLIED tabs.
+export async function getJobIdsForUserStatus(userId: string, status: AutoApplyUserStatus): Promise<string[]> {
+  const recs = await prisma.autoApply.findMany({
+    where: { userId, status },
+    select: { jobId: true },
+  })
+  return recs.map(r => r.jobId)
+}
+
+// Returns jobIds the user has NOT touched (no AutoApply record at all). Used
+// by the ELIGIBLE tab so saved/skipped/applied jobs don't bleed into it.
+export async function getEligibleJobIdFilter(userId: string) {
+  const touched = await getJobIdsWithAnyUserRecord(userId)
+  if (touched.length === 0) return undefined
+  return { notIn: touched }
+}
+
+// Toggle save for a given user × job. Returns the new effective status.
+export async function toggleSaveForUser(userId: string, jobId: string) {
+  const existing = await prisma.autoApply.findUnique({
+    where: { jobId_userId: { jobId, userId } },
+  })
+  if (existing?.status === 'saved') {
+    await prisma.autoApply.delete({ where: { id: existing.id } })
+    return 'eligible'
+  }
+  await prisma.autoApply.upsert({
+    where: { jobId_userId: { jobId, userId } },
+    update: { status: 'saved', errorMessage: null },
+    create: { userId, jobId, status: 'saved' },
+  })
+  return 'saved'
+}
+
+// Mark skipped for the calling user only.
+export async function skipForUser(userId: string, jobId: string) {
+  await prisma.autoApply.upsert({
+    where: { jobId_userId: { jobId, userId } },
+    update: { status: 'skipped', errorMessage: null },
+    create: { userId, jobId, status: 'skipped' },
+  })
+}
+
 // Generate a tailored cover letter based on job + user profile
 function generateCoverLetter(job: any, user: any, userSkills: string[]): string {
   const matchingSkills = userSkills.filter(skill => {
@@ -108,11 +202,8 @@ async function processApplication(
         },
       })
 
-      // Update job status
-      await prisma.job.update({
-        where: { id: job.id },
-        data: { autoApplyStatus: 'APPLIED' },
-      })
+      // Note: we deliberately do NOT touch Job.autoApplyStatus here.
+      // Per-user state lives on the AutoApply join table now.
 
       // Also create an Application record in the tracker
       await prisma.application.create({
@@ -177,13 +268,14 @@ export async function bulkAutoApply(userId: string, jobIds: string[]): Promise<A
   return results
 }
 
-// Get auto-apply stats for a user
+// Get auto-apply stats for a user — all per-user via AutoApply join.
 export async function getAutoApplyStats(userId: string) {
-  const total = await prisma.autoApply.count({ where: { userId } })
+  const total   = await prisma.autoApply.count({ where: { userId } })
   const applied = await prisma.autoApply.count({ where: { userId, status: 'applied' } })
-  const queued = await prisma.autoApply.count({ where: { userId, status: 'queued' } })
-  const errors = await prisma.autoApply.count({ where: { userId, status: 'error' } })
-  const saved = await prisma.job.count({ where: { autoApplyStatus: 'SAVED' } })
+  const queued  = await prisma.autoApply.count({ where: { userId, status: 'queued' } })
+  const errors  = await prisma.autoApply.count({ where: { userId, status: 'error' } })
+  const saved   = await prisma.autoApply.count({ where: { userId, status: 'saved' } })
+  const skipped = await prisma.autoApply.count({ where: { userId, status: 'skipped' } })
 
   const recent = await prisma.autoApply.findMany({
     where: { userId },
@@ -192,5 +284,5 @@ export async function getAutoApplyStats(userId: string) {
     take: 10,
   })
 
-  return { total, applied, queued, errors, saved, recent }
+  return { total, applied, queued, errors, saved, skipped, recent }
 }

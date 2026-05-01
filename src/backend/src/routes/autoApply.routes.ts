@@ -1,7 +1,10 @@
 import { Router, Response } from 'express'
 import { requireAuth, AuthRequest } from '../middleware/auth'
 import { prisma } from '../lib/prisma'
-import { queueAutoApply, bulkAutoApply, getAutoApplyStats } from '../services/autoApply'
+import {
+  queueAutoApply, bulkAutoApply, getAutoApplyStats,
+  toggleSaveForUser, skipForUser,
+} from '../services/autoApply'
 
 const router = Router()
 
@@ -51,25 +54,20 @@ router.get('/history', requireAuth, async (req: AuthRequest, res: Response) => {
   return res.json({ applications, total })
 })
 
-// PATCH /api/auto-apply/:jobId/skip — Skip a job
+// PATCH /api/auto-apply/:jobId/skip — Skip a job (per-user)
 router.patch('/:jobId/skip', requireAuth, async (req: AuthRequest, res: Response) => {
-  await prisma.job.update({
-    where: { id: req.params.jobId },
-    data: { autoApplyStatus: 'SKIPPED' },
-  })
+  const job = await prisma.job.findUnique({ where: { id: req.params.jobId }, select: { id: true } })
+  if (!job) return res.status(404).json({ error: 'Job not found' })
+  await skipForUser(req.userId!, req.params.jobId)
   return res.json({ success: true })
 })
 
-// PATCH /api/auto-apply/:jobId/save — toggle SAVED ↔ ELIGIBLE
+// PATCH /api/auto-apply/:jobId/save — toggle save (per-user)
 router.patch('/:jobId/save', requireAuth, async (req: AuthRequest, res: Response) => {
-  const job = await prisma.job.findUnique({ where: { id: req.params.jobId } })
+  const job = await prisma.job.findUnique({ where: { id: req.params.jobId }, select: { id: true } })
   if (!job) return res.status(404).json({ error: 'Job not found' })
-  const nextStatus = job.autoApplyStatus === 'SAVED' ? 'ELIGIBLE' : 'SAVED'
-  await prisma.job.update({
-    where: { id: req.params.jobId },
-    data: { autoApplyStatus: nextStatus },
-  })
-  return res.json({ success: true, status: nextStatus })
+  const status = await toggleSaveForUser(req.userId!, req.params.jobId)
+  return res.json({ success: true, status })
 })
 
 // GET /api/auto-apply/eligible — Get all eligible jobs for auto-apply

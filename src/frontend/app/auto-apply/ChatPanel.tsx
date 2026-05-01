@@ -2,23 +2,12 @@
 
 import { useState, useRef, useEffect } from 'react'
 import {
-  Bot, User, Send, Loader2, Link2, Target, Sparkles, Award, FileText, Check,
+  Bot, User, Send, Loader2, Link2, Target, Sparkles, Award, Check,
 } from 'lucide-react'
 import { scraperApi, userApi } from '@/lib/api'
-
-interface Portal {
-  key: string
-  company: string
-  ats: 'greenhouse' | 'lever' | 'ashby'
-  category: 'ai' | 'devtools' | 'fintech' | 'bigtech' | 'other'
-}
-
-interface ProfileState {
-  targetRole: string | null
-  yearsExperience: number | null
-  isRemotePreferred: boolean
-  targetLocation: string | null
-}
+import {
+  GRADE_STYLES, type Portal, type ProfileState, type EvaluationData,
+} from '@/lib/types'
 
 type Phase =
   | 'needs_cv'
@@ -27,18 +16,6 @@ type Phase =
   | 'ask_remote'
   | 'ask_location'
   | 'ready'
-
-interface EvaluationData {
-  grade: 'A' | 'B' | 'C' | 'D' | 'F'
-  score: number
-  summary: string
-  breakdown: {
-    skills: { score: number; matched: string[]; missing: string[] }
-    role: { score: number; reason: string }
-    location: { score: number; reason: string }
-    bonuses: { score: number; reasons: string[] }
-  }
-}
 
 type Message =
   | { role: 'user'; text: string; id: string }
@@ -49,14 +26,6 @@ type Message =
   | { role: 'assistant'; id: string; kind: 'search'; query: string }
   | { role: 'assistant'; id: string; kind: 'summary'; profile: ProfileState }
   | { role: 'assistant'; id: string; kind: 'error'; text: string }
-
-const GRADE_STYLES: Record<string, string> = {
-  A: 'bg-emerald-900/40 text-emerald-300 border-emerald-600/60',
-  B: 'bg-lime-900/40 text-lime-300 border-lime-600/60',
-  C: 'bg-amber-900/40 text-amber-300 border-amber-600/60',
-  D: 'bg-orange-900/40 text-orange-300 border-orange-600/60',
-  F: 'bg-red-900/40 text-red-300 border-red-600/60',
-}
 
 const URL_RE = /\b(https?:\/\/[^\s]+)/i
 const ATS_HOST_RE = /(greenhouse\.io|lever\.co|ashbyhq\.com)/i

@@ -15,6 +15,9 @@ node_modules/
 # Build info
 *.tsbuildinfo
 
+# Demo recording — raw .webm captures (mp4 in docs/ is committed deliberately)
+tools/demo/videos/
+
 # Build outputs
 .next/
 out/

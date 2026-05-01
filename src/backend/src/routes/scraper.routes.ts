@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import { Prisma } from '@prisma/client'
 import { requireAuth, AuthRequest } from '../middleware/auth'
 import { prisma } from '../lib/prisma'
 import { runAllScrapers } from '../services/scraper'
@@ -6,6 +7,9 @@ import { sendNewJobsDigest } from '../services/email'
 import { PORTALS, scanPortals } from '../services/portals'
 import { evaluateJob } from '../services/evaluation'
 import { importJobFromUrl } from '../services/importUrl'
+import {
+  attachUserStatus, getJobIdsForUserStatus, getEligibleJobIdFilter,
+} from '../services/autoApply'
 
 const router = Router()
 
@@ -77,7 +81,9 @@ router.post('/run', requireAuth, async (req: AuthRequest, res: Response) => {
   return res.json({ results, totalNew })
 })
 
-// GET /api/scraper/jobs — List scraped jobs with filters
+// GET /api/scraper/jobs — List scraped jobs with filters.
+// User-specific status (eligible/saved/applied/skipped) is resolved per-user
+// via the AutoApply join, not from Job.autoApplyStatus.
 router.get('/jobs', requireAuth, async (req: AuthRequest, res: Response) => {
   const {
     search, source, remote, visa, status, workMode, location, currency,
@@ -87,24 +93,17 @@ router.get('/jobs', requireAuth, async (req: AuthRequest, res: Response) => {
   const limit = Math.min(parseInt((limitStr as string) || '50', 10), 100)
   const offset = parseInt((offsetStr as string) || '0', 10)
 
-  const where: any = {}
+  const where: Prisma.JobWhereInput = {}
 
-  // Keyword search across title, company, description, tags
   if (search) {
     where.OR = [
-      { title: { contains: search as string, mode: 'insensitive' } },
-      { company: { contains: search as string, mode: 'insensitive' } },
+      { title:       { contains: search as string, mode: 'insensitive' } },
+      { company:     { contains: search as string, mode: 'insensitive' } },
       { description: { contains: search as string, mode: 'insensitive' } },
-      { tags: { contains: search as string, mode: 'insensitive' } },
+      { tags:        { contains: search as string, mode: 'insensitive' } },
     ]
   }
-
-  // Location search
-  if (location) {
-    where.location = { contains: location as string, mode: 'insensitive' }
-  }
-
-  // Work mode filter
+  if (location) where.location = { contains: location as string, mode: 'insensitive' }
   if (workMode === 'remote') {
     where.isRemote = true
   } else if (workMode === 'hybrid') {
@@ -113,23 +112,43 @@ router.get('/jobs', requireAuth, async (req: AuthRequest, res: Response) => {
     where.isRemote = false
     where.workMode = { not: 'hybrid' }
   }
-
-  if (source) where.source = source
+  if (source) where.source = source as string
   if (remote === 'true') where.isRemote = true
   if (visa === 'true') where.visaSponsorship = true
-  if (status) where.autoApplyStatus = status
-  if (currency) where.currency = currency
+  if (currency) where.currency = currency as string
 
-  const orderBy: any = sort === 'salary' ? { salaryMax: 'desc' } :
-                        sort === 'company' ? { company: 'asc' } :
-                        { scrapedAt: 'desc' }
+  // Per-user status filter — translates UI status enum to AutoApply rows.
+  const userId = req.userId!
+  if (status === 'SAVED') {
+    const ids = await getJobIdsForUserStatus(userId, 'saved')
+    if (ids.length === 0) return res.json({ jobs: [], total: 0, limit, offset })
+    where.id = { in: ids }
+  } else if (status === 'APPLIED') {
+    const ids = await getJobIdsForUserStatus(userId, 'applied')
+    if (ids.length === 0) return res.json({ jobs: [], total: 0, limit, offset })
+    where.id = { in: ids }
+  } else if (status === 'SKIPPED') {
+    const ids = await getJobIdsForUserStatus(userId, 'skipped')
+    if (ids.length === 0) return res.json({ jobs: [], total: 0, limit, offset })
+    where.id = { in: ids }
+  } else if (status === 'ELIGIBLE') {
+    const filter = await getEligibleJobIdFilter(userId)
+    if (filter) where.id = filter
+    where.autoApplyStatus = { not: 'NOT_ELIGIBLE' }
+  }
+
+  const orderBy: Prisma.JobOrderByWithRelationInput =
+    sort === 'salary'  ? { salaryMax: 'desc' } :
+    sort === 'company' ? { company: 'asc' } :
+                         { scrapedAt: 'desc' }
 
   const [jobs, total] = await Promise.all([
     prisma.job.findMany({ where, orderBy, skip: offset, take: limit }),
     prisma.job.count({ where }),
   ])
 
-  return res.json({ jobs, total, limit, offset })
+  const decorated = await attachUserStatus(jobs, userId)
+  return res.json({ jobs: decorated, total, limit, offset })
 })
 
 // GET /api/scraper/stats — Scraping statistics
