@@ -29,10 +29,14 @@ const allowedOrigins = [
   'https://intelicareer-kbu6.vercel.app',
   'http://localhost:3000',
 ]
+// In dev, accept any http://localhost:* origin so we can run the Next.js dev
+// server on alternate ports without re-deploying the API.
+const isLocalDevOrigin = (origin: string) =>
+  process.env.NODE_ENV !== 'production' && /^http:\/\/localhost:\d+$/.test(origin)
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc in dev)
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || isLocalDevOrigin(origin)) {
       callback(null, true)
     } else {
       callback(new Error('Not allowed by CORS'))

@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const FRONTEND = 'http://localhost:3000'
+const FRONTEND = process.env.FRONTEND_URL || 'http://localhost:3000'
 const VIEWPORT = { width: 1440, height: 900 }
 const HERE = dirname(fileURLToPath(import.meta.url))
 const VIDEO_DIR = join(HERE, 'videos')
@@ -29,23 +29,66 @@ async function type(page, selector, text, delay = 60) {
   }
 }
 
-const browser = await chromium.launch({ headless: true })
+// HEADLESS=1 to record silently; default shows the browser so you can see
+// what's happening on first run. DEBUG=1 dumps a screenshot + html on failure.
+const HEADLESS = process.env.HEADLESS === '1'
+const browser = await chromium.launch({ headless: HEADLESS })
 const context = await browser.newContext({
   recordVideo: { dir: VIDEO_DIR, size: VIEWPORT },
   viewport: VIEWPORT,
 })
 const page = await context.newPage()
 
+// Surface page-side errors so we can tell when the app itself is broken.
+page.on('pageerror', err => console.error('[page error]', err.message))
+page.on('console', msg => {
+  if (msg.type() === 'error') console.error('[page console]', msg.text())
+})
+
+async function dumpFailure(label) {
+  try {
+    await page.screenshot({ path: join(HERE, `failure-${label}.png`), fullPage: true })
+    const html = await page.content()
+    const fs = await import('node:fs/promises')
+    await fs.writeFile(join(HERE, `failure-${label}.html`), html)
+    console.error(`[demo] dumped failure-${label}.png and failure-${label}.html`)
+    console.error(`[demo] current url: ${page.url()}`)
+  } catch (e) {
+    console.error('[demo] failed to dump diagnostics:', e.message)
+  }
+}
+
 try {
   // ── 1. Login as the demo user ────────────────────────────────
   console.log('[demo] logging in')
-  await page.goto(`${FRONTEND}/login`, { waitUntil: 'networkidle' })
-  await page.waitForTimeout(1200)
-  await type(page, 'input[type="email"]',    'demo@intelicareer.com')
-  await type(page, 'input[type="password"]', 'demo1234')
+  const resp = await page.goto(`${FRONTEND}/login`, { waitUntil: 'domcontentloaded' })
+  console.log(`[demo] /login -> HTTP ${resp?.status()} ${page.url()}`)
+  await page.waitForLoadState('networkidle').catch(() => {})
+  await page.waitForTimeout(2000)
+
+  // Robust email-input lookup: try several locators before giving up.
+  const emailInput = page.locator(
+    'input[type="email"], input[name="email"], input[autocomplete="email"]'
+  ).first()
+  try {
+    await emailInput.waitFor({ state: 'visible', timeout: 15000 })
+  } catch (err) {
+    await dumpFailure('login')
+    throw err
+  }
+  await emailInput.fill('demo@intelicareer.com')
+
+  const passwordInput = page.locator(
+    'input[type="password"], input[autocomplete="current-password"]'
+  ).first()
+  await passwordInput.fill('demo1234')
+
   await page.waitForTimeout(500)
   await page.click('button[type="submit"]')
-  await page.waitForURL('**/dashboard', { timeout: 15000 })
+  await page.waitForURL('**/dashboard', { timeout: 20000 }).catch(async (err) => {
+    await dumpFailure('post-login')
+    throw err
+  })
   await page.waitForLoadState('networkidle')
   await page.waitForTimeout(2500)
 

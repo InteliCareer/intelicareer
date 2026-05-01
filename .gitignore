@@ -17,6 +17,8 @@ node_modules/
 
 # Demo recording — raw .webm captures (mp4 in docs/ is committed deliberately)
 tools/demo/videos/
+tools/demo/failure-*.png
+tools/demo/failure-*.html
 
 # Build outputs
 .next/
