@@ -5,7 +5,7 @@
 // Run: npm run demo  →  records webm, converts to docs/demo.mp4
 
 import { chromium } from 'playwright'
-import { mkdirSync, existsSync, readdirSync, statSync } from 'node:fs'
+import { mkdirSync, existsSync, readdirSync, statSync, copyFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,10 +15,12 @@ const VIEWPORT = { width: 1440, height: 900 }
 const HERE = dirname(fileURLToPath(import.meta.url))
 const VIDEO_DIR = join(HERE, 'videos')
 const REPO_ROOT = resolve(HERE, '..', '..')
-const MP4_OUT = join(REPO_ROOT, 'docs', 'demo.mp4')
+const DOCS_DIR = join(REPO_ROOT, 'docs')
+const WEBM_OUT = join(DOCS_DIR, 'demo.webm')
+const MP4_OUT  = join(DOCS_DIR, 'demo.mp4')
 
 mkdirSync(VIDEO_DIR, { recursive: true })
-mkdirSync(dirname(MP4_OUT), { recursive: true })
+mkdirSync(DOCS_DIR, { recursive: true })
 
 // Slow human-style typing so the recording reads naturally.
 async function type(page, selector, text, delay = 60) {
@@ -164,7 +166,16 @@ try {
   await browser.close()
 }
 
-// ── Convert the latest .webm in VIDEO_DIR to MP4_OUT via ffmpeg ─
+// ── Publish the recording to docs/ ─────────────────────────────
+//
+// Playwright records .webm. GitHub renders <video src="...webm"> natively, so
+// webm alone is enough — we just copy it to docs/demo.webm.
+//
+// MP4 is preferred for sharing outside GitHub (Twitter, Slack uploads, etc.)
+// but Playwright's bundled ffmpeg is built with --disable-everything and
+// can't encode H.264. We try a system ffmpeg as a bonus; if it's not there
+// we skip silently.
+
 const webm = newestFile(VIDEO_DIR, '.webm')
 if (!webm) {
   console.error('[demo] no .webm produced — recording failed')
@@ -172,29 +183,28 @@ if (!webm) {
 }
 console.log(`[demo] webm: ${webm}`)
 
-const ffmpeg = findFfmpeg()
-if (!ffmpeg) {
-  console.error('[demo] ffmpeg not found — install ffmpeg or run: npx playwright install')
-  console.error(`[demo] webm is at ${webm}; convert it manually if you can.`)
-  process.exit(1)
-}
+copyFileSync(webm, WEBM_OUT)
+console.log(`[demo] saved ${WEBM_OUT}`)
 
-console.log(`[demo] ffmpeg: ${ffmpeg}`)
-console.log(`[demo] converting → ${MP4_OUT}`)
-const r = spawnSync(ffmpeg, [
-  '-y', '-i', webm,
-  '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
-  '-pix_fmt', 'yuv420p',         // ensure broad player compatibility
-  '-movflags', '+faststart',     // streamable playback (GitHub <video>)
-  '-an',                         // no audio track to drop
-  MP4_OUT,
-], { stdio: ['ignore', 'inherit', 'inherit'] })
-
-if (r.status !== 0) {
-  console.error('[demo] ffmpeg conversion failed')
-  process.exit(r.status ?? 1)
+const systemFfmpeg = findSystemFfmpeg()
+if (systemFfmpeg) {
+  console.log(`[demo] system ffmpeg: ${systemFfmpeg} — encoding mp4`)
+  const r = spawnSync(systemFfmpeg, [
+    '-y', '-i', webm,
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
+    '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart',
+    '-an',
+    MP4_OUT,
+  ], { stdio: ['ignore', 'inherit', 'inherit'] })
+  if (r.status === 0) {
+    console.log(`[demo] saved ${MP4_OUT}`)
+  } else {
+    console.warn('[demo] mp4 encoding failed, but webm is ready')
+  }
+} else {
+  console.log('[demo] no system ffmpeg — skipping mp4 (run `brew install ffmpeg` to enable)')
 }
-console.log(`[demo] saved ${MP4_OUT}`)
 
 // ── helpers ────────────────────────────────────────────────────
 function newestFile(dir, ext) {
@@ -206,23 +216,11 @@ function newestFile(dir, ext) {
   return files.length ? join(dir, files[0].f) : null
 }
 
-function findFfmpeg() {
-  // Prefer Playwright's bundled ffmpeg (we know it's there — Chromium needs it).
-  const cache = join(process.env.HOME || '', 'Library', 'Caches', 'ms-playwright')
-  if (existsSync(cache)) {
-    const dirs = readdirSync(cache)
-      .filter(d => d.startsWith('ffmpeg-'))
-      .sort()
-      .reverse()
-    for (const d of dirs) {
-      for (const bin of ['ffmpeg-mac', 'ffmpeg-linux', 'ffmpeg.exe', 'ffmpeg']) {
-        const p = join(cache, d, bin)
-        if (existsSync(p)) return p
-      }
-    }
-  }
-  // Fall back to system ffmpeg.
+function findSystemFfmpeg() {
   const which = spawnSync('which', ['ffmpeg'])
-  if (which.status === 0) return which.stdout.toString().trim()
+  if (which.status === 0) {
+    const path = which.stdout.toString().trim()
+    if (path && existsSync(path)) return path
+  }
   return null
 }
