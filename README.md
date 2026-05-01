@@ -4,9 +4,12 @@
 
 ## Demo
 
-[![Watch the InteliCareer demo](docs/demo-poster.svg)](docs/demo.webm)
+<video src="https://github.com/InteliCareer/intelicareer/raw/main/docs/demo.mp4" controls muted playsinline width="900">
+  Your browser doesn't render embedded video here —
+  <a href="https://github.com/InteliCareer/intelicareer/raw/main/docs/demo.mp4">download the walkthrough</a>.
+</video>
 
-> 90-second walkthrough. Click the poster above to play (`docs/demo.webm`). The recording is produced by `tools/demo` (Playwright). Regenerate any time with `cd tools/demo && npm run demo` while both dev servers are running. With `brew install ffmpeg` available, an extra `docs/demo.mp4` is also emitted for platforms that don't accept webm.
+> 90-second walkthrough. Recording produced by `tools/demo` (Playwright). Regenerate any time with `cd tools/demo && npm run demo` while both dev servers are running.
 
 ---
 
