@@ -4,12 +4,9 @@
 
 ## Demo
 
-<video src="https://github.com/InteliCareer/intelicareer/raw/main/docs/demo.mp4" controls muted playsinline width="900">
-  Your browser doesn't render embedded video here —
-  <a href="https://github.com/InteliCareer/intelicareer/raw/main/docs/demo.mp4">download the walkthrough</a>.
-</video>
+![InteliCareer walkthrough](docs/demo.gif)
 
-> 90-second walkthrough. Recording produced by `tools/demo` (Playwright). Regenerate any time with `cd tools/demo && npm run demo` while both dev servers are running.
+> 90-second walkthrough. Higher-quality versions: [MP4](docs/demo.mp4) · [WebM](docs/demo.webm). Recording is produced by `tools/demo` (Playwright); regenerate with `cd tools/demo && npm run demo` while both dev servers are running.
 
 ---
 
