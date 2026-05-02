@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "demo": "node demo.mjs"
+    "demo": "node demo.mjs",
+    "demo:tracker": "node tracker.mjs",
+    "demo:insights": "node insights.mjs",
+    "demo:all": "node demo.mjs && node tracker.mjs && node insights.mjs"
   },
   "devDependencies": {
     "playwright": "^1.50.0"

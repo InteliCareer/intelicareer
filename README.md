@@ -2,11 +2,37 @@
 
 > A data-driven platform that empowers tech professionals to make smarter career decisions through job tracking, skill analysis, and market intelligence.
 
-## Demo
+## Demos
 
-![InteliCareer walkthrough](docs/demo.gif)
+### Auto Apply — chat-driven job search
 
-> 90-second walkthrough. Higher-quality versions: [MP4](docs/demo.mp4) · [WebM](docs/demo.webm). Recording is produced by `tools/demo` (Playwright); regenerate with `cd tools/demo && npm run demo` while both dev servers are running.
+![Auto Apply walkthrough](docs/demo.gif)
+
+> Login → scan AI companies → A–F scoring → bookmark → search.
+> Quality versions: [MP4](docs/demo.mp4) · [WebM](docs/demo.webm)
+
+### Tracker — application pipeline
+
+![Tracker walkthrough](docs/demo-tracker.gif)
+
+> Kanban board, add-application modal, application detail drawer.
+> Quality versions: [MP4](docs/demo-tracker.mp4) · [WebM](docs/demo-tracker.webm)
+
+### Insights — career analytics
+
+![Insights walkthrough](docs/demo-insights.gif)
+
+> Skill-gap charts, role selector, salary trends.
+> Quality versions: [MP4](docs/demo-insights.mp4) · [WebM](docs/demo-insights.webm)
+
+> Recordings are produced by `tools/demo` (Playwright + ffmpeg). Regenerate any of them while both dev servers are running:
+> ```bash
+> cd tools/demo
+> npm run demo            # Auto Apply (includes login)
+> npm run demo:tracker    # Tracker
+> npm run demo:insights   # Insights
+> npm run demo:all        # All three
+> ```
 
 ---
 
