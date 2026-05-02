@@ -1,13 +1,34 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/auth'
 import { authApi } from '@/lib/api'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
+// useSearchParams forces dynamic rendering — wrap the inner component in a
+// Suspense boundary so Next.js can statically prerender the loading shell.
 export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<VerifyEmailFallback />}>
+      <VerifyEmailInner />
+    </Suspense>
+  )
+}
+
+function VerifyEmailFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-surface px-4">
+      <div className="w-full max-w-md text-center">
+        <Loader2 className="w-12 h-12 text-brand-400 animate-spin mx-auto mb-4" />
+        <h1 className="text-xl font-bold text-gray-100">Loading…</h1>
+      </div>
+    </div>
+  )
+}
+
+function VerifyEmailInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { login } = useAuthStore()

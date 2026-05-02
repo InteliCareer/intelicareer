@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import Link from 'next/link'
-import { Check, X, Eye, EyeOff, CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
+import { Check, X, Eye, EyeOff, CheckCircle, XCircle, ArrowLeft, Loader2 } from 'lucide-react'
 
 interface PasswordCheck {
   label: string
@@ -19,7 +19,27 @@ const PASSWORD_CHECKS: PasswordCheck[] = [
   { label: 'Special character (!@#$...)', test: pw => /[^a-zA-Z0-9]/.test(pw) },
 ]
 
+// useSearchParams forces dynamic rendering — wrap the inner component in a
+// Suspense boundary so Next.js can statically prerender the loading shell.
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetPasswordFallback />}>
+      <ResetPasswordInner />
+    </Suspense>
+  )
+}
+
+function ResetPasswordFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-surface px-4">
+      <div className="w-full max-w-md text-center">
+        <Loader2 className="w-12 h-12 text-brand-400 animate-spin mx-auto mb-4" />
+      </div>
+    </div>
+  )
+}
+
+function ResetPasswordInner() {
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
 
